@@ -5,10 +5,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-
+	cmttypes "github.com/cometbft/cometbft/types"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/spf13/cobra"
-
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
@@ -16,7 +14,17 @@ import (
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/config"
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/connection"
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/types"
+	"github.com/spf13/cobra"
 )
+
+// BlockMeta is the CometBFT-specific per-block metadata that is
+// exposed via the consensus API.
+type BlockMeta struct {
+	// Header is the CometBFT block header.
+	Header *cmttypes.Header `json:"header"`
+	// LastCommit is the CometBFT last commit info.
+	LastCommit *cmttypes.Commit `json:"last_commit"`
+}
 
 func main() {
 	ctx := context.Background()
@@ -39,6 +47,11 @@ func main() {
 	cc := conn.Consensus()
 	cb, err := cc.GetBlock(ctx, consensusBlockNum)
 	cobra.CheckErr(err)
+
+	meta := BlockMeta{}
+	err = cbor.Unmarshal(cb.Meta, &meta)
+	cobra.CheckErr(err)
+	fmt.Printf("meta: %v", meta.LastCommit)
 
 	consensusStateRoot := cb.StateRoot // This is derived from AppHash in the block header.
 	fmt.Printf("Consensus height:          %d\n", cb.Height)
@@ -63,6 +76,8 @@ func main() {
 		ProofVersion: 1,
 	})
 	cobra.CheckErr(err)
+
+	//fmt.Printf("Entries: %x\n", pr.Proof.Entries)
 
 	// Step 3: Verify Merkle proof against the consensus state root.
 	var pv syncer.ProofVerifier
