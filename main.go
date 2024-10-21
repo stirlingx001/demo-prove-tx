@@ -51,7 +51,7 @@ func main() {
 	meta := BlockMeta{}
 	err = cbor.Unmarshal(cb.Meta, &meta)
 	cobra.CheckErr(err)
-	fmt.Printf("meta: %v", meta.LastCommit)
+	fmt.Printf("Consensus state root hash: %x\n", meta.Header.AppHash.Bytes())
 
 	consensusStateRoot := cb.StateRoot // This is derived from AppHash in the block header.
 	fmt.Printf("Consensus height:          %d\n", cb.Height)
