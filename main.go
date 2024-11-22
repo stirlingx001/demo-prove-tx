@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/config"
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/connection"
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/types"
+	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/modules/evm"
 )
 
 func main() {
@@ -24,10 +25,10 @@ func main() {
 	pt := net.ParaTimes.All["sapphire"]
 	// NOTE: Consensus layer block number must be within the 1200-block window after the given
 	//       runtime block was finalized in order for the root hashes to be available.
-	consensusBlockNum := int64(23286817)                                                 // Consensus layer block number.
-	blockNum := uint64(8391175)                                                          // Sapphire block number.
-	txHashHex := "f947a92965797c77c2e0240be1cca3cc167faa4f3163edcaec2fda70f1354780"      // SHA512/256 transaction hash
-	txEthHashHex := "0x12b535a1752a81184c26cc6497cc3f6cb449b0c611d68c8c7c2b5382bb6d373b" // Ethereum transaction hash
+	consensusBlockNum := int64(24002573)                                                 // Consensus layer block number.
+	blockNum := uint64(9106088)                                                          // Sapphire block number.
+	txHashHex := "9e8f32ff98ca4d835281886d8e4041bce3cdce714d488c63b9202c65e1a4531a"      // SHA512/256 transaction hash
+	txEthHashHex := "0xf3d49f4e387ff1f28bfa52b2464376ddcc70c56256ab963047d2e9e7398a479f" // Ethereum transaction hash
 
 	// Establish a connection with the public Testnet gRPC node.
 	conn, err := connection.Connect(ctx, net)
@@ -231,5 +232,53 @@ func main() {
 		fmt.Printf("            data:          0x%X\n", res.Unknown)
 	default:
 		panic("unexpected result kind")
+	}
+
+	// Step 13: Query the events emitted by the transaction from the verified I/O root.
+	//
+	//         The storage key format is: E <tag> <tx-hash>
+	txStorageKey = append([]byte{'E'}, []byte("evm\x00\x00\x00\x01")...)
+	txStorageKey = append(txStorageKey, txHash[:]...)
+
+	pr, err = rc.State().SyncGet(ctx, &syncer.GetRequest{
+		Tree: syncer.TreeID{
+			Root: mkvsNode.Root{
+				Namespace: pt.Namespace(),
+				Version:   blockNum,
+				Type:      mkvsNode.RootTypeIO,
+				Hash:      verifiedIORootHash,
+			},
+			Position: verifiedIORootHash,
+		},
+		Key:          txStorageKey,
+		ProofVersion: 1,
+	})
+	cobra.CheckErr(err)
+
+	// Step 14: Verify Merkle proof against the verified I/O root. This proves that the given EVM
+	//          events have been emitted by the transaction.
+	wl, err = pv.VerifyProofToWriteLog(ctx, verifiedIORootHash, &pr.Proof)
+	cobra.CheckErr(err)
+
+	// Step 15: Extract the output from the verified proof.
+	var logs []*evm.Event
+	for _, v := range wl {
+		if !bytes.Equal(v.Key, txStorageKey) {
+			continue
+		}
+
+		err = cbor.Unmarshal(v.Value, &logs)
+		cobra.CheckErr(err)
+		break
+	}
+
+	fmt.Printf("EVM events:\n")
+	for _, log := range logs {
+		fmt.Printf("- Address: 0x%X\n", log.Address)
+		fmt.Printf("  Topics:\n")
+		for _, topic := range log.Topics {
+			fmt.Printf("    - 0x%X\n", topic)
+		}
+		fmt.Printf("  Data: 0x%X\n", log.Data)
 	}
 }
