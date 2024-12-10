@@ -181,71 +181,71 @@ func main() {
 	// Step 9: Query the transaction result from the verified I/O root.
 	//
 	//         The storage key format is: T <tx-hash> 0x02
-	txStorageKey = append([]byte{'T'}, txHash[:]...)
-	txStorageKey = append(txStorageKey, byte(0x02))
-
-	pr, err = rc.State().SyncGet(ctx, &syncer.GetRequest{
-		Tree: syncer.TreeID{
-			Root: mkvsNode.Root{
-				Namespace: pt.Namespace(),
-				Version:   blockNum,
-				Type:      mkvsNode.RootTypeIO,
-				Hash:      verifiedIORootHash,
-			},
-			Position: verifiedIORootHash,
-		},
-		Key:          txStorageKey,
-		ProofVersion: 1,
-	})
-	cobra.CheckErr(err)
+	//txStorageKey = append([]byte{'T'}, txHash[:]...)
+	//txStorageKey = append(txStorageKey, byte(0x02))
+	//
+	//pr, err = rc.State().SyncGet(ctx, &syncer.GetRequest{
+	//	Tree: syncer.TreeID{
+	//		Root: mkvsNode.Root{
+	//			Namespace: pt.Namespace(),
+	//			Version:   blockNum,
+	//			Type:      mkvsNode.RootTypeIO,
+	//			Hash:      verifiedIORootHash,
+	//		},
+	//		Position: verifiedIORootHash,
+	//	},
+	//	Key:          txStorageKey,
+	//	ProofVersion: 1,
+	//})
+	//cobra.CheckErr(err)
 
 	// Step 10: Verify Merkle proof against the verified I/O root. This proves that the transaction
 	//          has been executed within a block and also gets its raw result.
-	wl, err = pv.VerifyProofToWriteLog(ctx, verifiedIORootHash, &pr.Proof)
-	cobra.CheckErr(err)
+	//wl, err = pv.VerifyProofToWriteLog(ctx, verifiedIORootHash, &pr.Proof)
+	//cobra.CheckErr(err)
 
 	// Step 11: Extract the output from the verified proof.
-	var verifiedTxResult []byte
-	for _, v := range wl {
-		if !bytes.Equal(v.Key, txStorageKey) {
-			continue
-		}
-
-		type outputArtifacts struct {
-			_ struct{} `cbor:",toarray"` // nolint
-
-			// Output is the transaction output.
-			Output []byte
-		}
-		var oa outputArtifacts
-		err = cbor.Unmarshal(v.Value, &oa)
-		cobra.CheckErr(err)
-
-		verifiedTxResult = oa.Output
-		break
-	}
+	//var verifiedTxResult []byte
+	//for _, v := range wl {
+	//	if !bytes.Equal(v.Key, txStorageKey) {
+	//		continue
+	//	}
+	//
+	//	type outputArtifacts struct {
+	//		_ struct{} `cbor:",toarray"` // nolint
+	//
+	//		// Output is the transaction output.
+	//		Output []byte
+	//	}
+	//	var oa outputArtifacts
+	//	err = cbor.Unmarshal(v.Value, &oa)
+	//	cobra.CheckErr(err)
+	//
+	//	verifiedTxResult = oa.Output
+	//	break
+	//}
 
 	// Step 12: Parse the transaction result.
-	var txResult types.CallResult
-	err = cbor.Unmarshal(verifiedTxResult, &txResult)
-	cobra.CheckErr(err)
+	//var txResult types.CallResult
+	//err = cbor.Unmarshal(verifiedTxResult, &txResult)
+	//cobra.CheckErr(err)
 
-	switch res := txResult; {
-	case res.Failed != nil:
-		fmt.Printf("Runtime height:            %d\n", blockNum)
-		fmt.Printf("Transaction status:        failed\n")
-		fmt.Printf("            module:        %s\n", res.Failed.Module)
-		fmt.Printf("            code:          %d\n", res.Failed.Code)
-		fmt.Printf("            message:       %s\n", res.Failed.Message)
-	case res.Ok != nil:
-		fmt.Printf("Transaction status:        ok\n")
-		fmt.Printf("            data:          0x%X\n", res.Ok)
-	case res.Unknown != nil:
-		fmt.Printf("Transaction status:        unknown\n")
-		fmt.Printf("            data:          0x%X\n", res.Unknown)
-	default:
-		panic("unexpected result kind")
-	}
+	//switch res := txResult; {
+	//case res.Failed != nil:
+	//	fmt.Printf("Runtime height:            %d\n", blockNum)
+	//	fmt.Printf("Transaction status:        failed\n")
+	//	fmt.Printf("            module:        %s\n", res.Failed.Module)
+	//	fmt.Printf("            code:          %d\n", res.Failed.Code)
+	//	fmt.Printf("            message:       %s\n", res.Failed.Message)
+	//case res.Ok != nil:
+	//	fmt.Printf("Transaction status:        ok\n")
+	//	fmt.Printf("            data:          0x%X\n", res.Ok)
+	//case res.Unknown != nil:
+	//	fmt.Printf("Transaction status:        unknown\n")
+	//	fmt.Printf("            data:          0x%X\n", res.Unknown)
+	//default:
+	//	panic("unexpected result kind")
+	//}
 
 	// Step 13: Query the events emitted by the transaction from the verified I/O root.
 	//
