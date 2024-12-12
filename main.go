@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"github.com/cometbft/cometbft/libs/os"
 	cmttypes "github.com/cometbft/cometbft/types"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
@@ -14,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/config"
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/connection"
 	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/modules/evm"
-	"github.com/oasisprotocol/oasis-sdk/client-sdk/go/types"
 	"github.com/spf13/cobra"
 )
 
@@ -33,10 +33,10 @@ func main() {
 	pt := net.ParaTimes.All["sapphire"]
 	// NOTE: Consensus layer block number must be within the 1200-block window after the given
 	//       runtime block was finalized in order for the root hashes to be available.
-	consensusBlockNum := int64(24002573)                                                 // Consensus layer block number.
-	blockNum := uint64(9106088)                                                          // Sapphire block number.
-	txHashHex := "9e8f32ff98ca4d835281886d8e4041bce3cdce714d488c63b9202c65e1a4531a"      // SHA512/256 transaction hash
-	txEthHashHex := "0xf3d49f4e387ff1f28bfa52b2464376ddcc70c56256ab963047d2e9e7398a479f" // Ethereum transaction hash
+	consensusBlockNum := int64(24002573)                                            // Consensus layer block number.
+	blockNum := uint64(9106088)                                                     // Sapphire block number.
+	txHashHex := "9e8f32ff98ca4d835281886d8e4041bce3cdce714d488c63b9202c65e1a4531a" // SHA512/256 transaction hash
+	//txEthHashHex := "0xf3d49f4e387ff1f28bfa52b2464376ddcc70c56256ab963047d2e9e7398a479f" // Ethereum transaction hash
 
 	// Establish a connection with the public Testnet gRPC node.
 	conn, err := connection.Connect(ctx, net)
@@ -53,6 +53,14 @@ func main() {
 	err = cbor.Unmarshal(cb.Meta, &meta)
 	cobra.CheckErr(err)
 	fmt.Printf("Consensus state root hash: %x\n", meta.Header.AppHash.Bytes())
+
+	os.WriteFile("1.txt", []byte(hex.EncodeToString(cb.Meta[:])), 0766)
+
+	d := cbor.Marshal(meta)
+
+	if bytes.Equal(d, cb.Meta) {
+		fmt.Printf("ok\n")
+	}
 
 	consensusStateRoot := cb.StateRoot // This is derived from AppHash in the block header.
 	fmt.Printf("Consensus height:          %d\n", cb.Height)
@@ -92,9 +100,13 @@ func main() {
 		}
 
 		err = cbor.Unmarshal(v.Value, &verifiedRoots)
+		fmt.Printf("v.Value: %x\n", v.Value)
+
 		cobra.CheckErr(err)
 		break
 	}
+
+	//cbor.Marshal(&verifiedRoots)
 
 	verifiedIORootHash := verifiedRoots[1]
 	fmt.Printf("Runtime height:            %d\n", blockNum)
@@ -132,51 +144,53 @@ func main() {
 	cobra.CheckErr(err)
 
 	// Step 7: Extract the transaction from the verified proof.
-	var verifiedTx []byte
-	for _, v := range wl {
-		if !bytes.Equal(v.Key, txStorageKey) {
-			continue
-		}
-
-		type inputArtifacts struct {
-			_ struct{} `cbor:",toarray"` // nolint
-
-			// Input is the transaction input.
-			Input []byte
-			// Order is the transaction order within the block.
-			Order uint32
-		}
-		var ia inputArtifacts
-		err = cbor.Unmarshal(v.Value, &ia)
-		cobra.CheckErr(err)
-
-		verifiedTx = ia.Input
-		break
-	}
+	//var verifiedTx []byte
+	//for _, v := range wl {
+	//	if !bytes.Equal(v.Key, txStorageKey) {
+	//		continue
+	//	}
+	//
+	//	type inputArtifacts struct {
+	//		_ struct{} `cbor:",toarray"` // nolint
+	//
+	//		// Input is the transaction input.
+	//		Input []byte
+	//		// Order is the transaction order within the block.
+	//		Order uint32
+	//	}
+	//	var ia inputArtifacts
+	//	err = cbor.Unmarshal(v.Value, &ia)
+	//	cobra.CheckErr(err)
+	//
+	//	fmt.Printf("inputArtifacts Value: %x\n", v.Value)
+	//
+	//	verifiedTx = ia.Input
+	//	break
+	//}
 
 	// Step 8: Parse SDK-wrapped Ethereum transaction.
-	var tx types.UnverifiedTransaction
-	err = cbor.Unmarshal(verifiedTx, &tx)
-	cobra.CheckErr(err)
-
-	if len(tx.AuthProofs) != 1 || tx.AuthProofs[0].Module != "evm.ethereum.v0" {
-		panic("unexpected non-ethereum transaction")
-	}
-
-	var ethTx ethTypes.Transaction
-	if err = ethTx.UnmarshalBinary(tx.Body); err != nil {
-		panic("unexpected malformed ethereum transaction")
-	}
-
-	fmt.Printf("Transaction hash:          %s\n", tx.Hash())
-	fmt.Printf("Eth transaction hash:      %s\n", ethTx.Hash())
-
-	if tx.Hash().String() != txHashHex {
-		panic("unexpected SDK-wrapped transaction hash")
-	}
-	if ethTx.Hash().String() != txEthHashHex {
-		panic("unexpected eth transaction hash")
-	}
+	//var tx types.UnverifiedTransaction
+	//err = cbor.Unmarshal(verifiedTx, &tx)
+	//cobra.CheckErr(err)
+	//
+	//if len(tx.AuthProofs) != 1 || tx.AuthProofs[0].Module != "evm.ethereum.v0" {
+	//	panic("unexpected non-ethereum transaction")
+	//}
+	//
+	//var ethTx ethTypes.Transaction
+	//if err = ethTx.UnmarshalBinary(tx.Body); err != nil {
+	//	panic("unexpected malformed ethereum transaction")
+	//}
+	//
+	//fmt.Printf("Transaction hash:          %s\n", tx.Hash())
+	//fmt.Printf("Eth transaction hash:      %s\n", ethTx.Hash())
+	//
+	//if tx.Hash().String() != txHashHex {
+	//	panic("unexpected SDK-wrapped transaction hash")
+	//}
+	//if ethTx.Hash().String() != txEthHashHex {
+	//	panic("unexpected eth transaction hash")
+	//}
 
 	// Step 9: Query the transaction result from the verified I/O root.
 	//
@@ -282,6 +296,7 @@ func main() {
 
 		err = cbor.Unmarshal(v.Value, &logs)
 		cobra.CheckErr(err)
+		fmt.Printf("log value: %x\n", v.Value)
 		break
 	}
 
