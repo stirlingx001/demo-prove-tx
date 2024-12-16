@@ -9,6 +9,7 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
@@ -33,7 +34,8 @@ func main() {
 	pt := net.ParaTimes.All["sapphire"]
 	// NOTE: Consensus layer block number must be within the 1200-block window after the given
 	//       runtime block was finalized in order for the root hashes to be available.
-	consensusBlockNum := int64(24002573)                                            // Consensus layer block number.
+	//consensusBlockNum := int64(24002573)                                            // Consensus layer block number.
+	consensusBlockNum := int64(0)
 	blockNum := uint64(9106088)                                                     // Sapphire block number.
 	txHashHex := "9e8f32ff98ca4d835281886d8e4041bce3cdce714d488c63b9202c65e1a4531a" // SHA512/256 transaction hash
 	//txEthHashHex := "0xf3d49f4e387ff1f28bfa52b2464376ddcc70c56256ab963047d2e9e7398a479f" // Ethereum transaction hash
@@ -42,12 +44,53 @@ func main() {
 	conn, err := connection.Connect(ctx, net)
 	cobra.CheckErr(err)
 
+	// Assumes cc= https://github.com/oasisprotocol/demo-prove-tx/blob/4fc1a52d0a304a54be1a70e68184c60b772292cb/main.go#L40
+
 	// Step 1: Query the relevant consensus layer block to obtain a trusted consensus state root.
 	//         Here we are using a simple RPC query to a full node, but in practice one would use
 	//         light client verification to obtain the block header.
 	cc := conn.Consensus()
+
+	st, err := cc.GetStatus(ctx)
+	cobra.CheckErr(err)
+	fmt.Printf("GenesisHeight: %v, LatestHeight: %v\n", st.GenesisHeight, st.LatestHeight)
+
+	bkL := st.GenesisHeight
+	bkR := st.LatestHeight
+	count := 0
+	for bkL <= bkR {
+		count++
+		m := (bkL + bkR) >> 1
+		b, err := cc.RootHash().GetLatestBlock(ctx, &api.RuntimeRequest{RuntimeID: pt.Namespace(), Height: m})
+		// Ensure b.Header.Round is within (blockNum, blockNum+1200).
+		// Otherwise, adjust the consensusBlockNum to a higher or lower value.
+		if err != nil {
+			fmt.Printf("GetLatestBlock: %v\n", err)
+			bkR = m - 1
+			continue
+		}
+		if b.Header.Round > blockNum && b.Header.Round < blockNum+1200 {
+			consensusBlockNum = m
+			break
+		}
+		if b.Header.Round < blockNum {
+			bkL = m + 1
+		} else {
+			bkR = m - 1
+		}
+	}
+	fmt.Printf("count: %v\n", count)
+	fmt.Printf("consensusBlockNum: %v\n", consensusBlockNum)
+	if consensusBlockNum == 0 {
+		panic("invalid consensusBlockNum")
+	}
+
 	cb, err := cc.GetBlock(ctx, consensusBlockNum)
 	cobra.CheckErr(err)
+
+	// Assumes cc= https://github.com/oasisprotocol/demo-prove-tx/blob/4fc1a52d0a304a54be1a70e68184c60b772292cb/main.go#L40
+	// Ensure b.Header.Round is within (blockNum, blockNum+1200).
+	// Otherwise, adjust the consensusBlockNum to a higher or lower value.
 
 	meta := BlockMeta{}
 	err = cbor.Unmarshal(cb.Meta, &meta)
